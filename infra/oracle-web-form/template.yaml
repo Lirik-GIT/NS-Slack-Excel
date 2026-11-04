@@ -7,6 +7,10 @@ Parameters:
     Type: String
     Default: komaldeep@lirik.io
     Description: From address for every email to AEs (must belong to SenderDomain)
+  SenderName:
+    Type: String
+    Default: Lirik NS ROM
+    Description: Display name shown to AEs in the From line
   SenderDomain:
     Type: String
     Default: lirik.io
@@ -188,6 +192,7 @@ Resources:
           TABLE: !Ref SubmissionsTable
           QUEUE_URL: !Ref SubmissionsQueue
           SENDER: !Ref SenderAddress
+          SENDER_NAME: !Ref SenderName
           CONFIG_SET: !Ref SesConfigurationSet
           HMAC_PARAM: !Ref HmacKeyParameter
           APPROVED_PARAM: !Ref ApprovedEmailsParameter

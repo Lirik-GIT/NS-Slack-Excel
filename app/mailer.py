@@ -7,6 +7,7 @@ import json
 import logging
 import re
 from email.message import EmailMessage
+from email.utils import formataddr
 
 from . import intake, pdf, tokens
 
@@ -30,6 +31,7 @@ class Mailer:
         self.store, self.ses, self.policy, self.renderer, self.key = store, ses, policy, renderer, hmac_key
         email = web_cfg.get("email", {})
         self.sender = email["sender"]
+        self.sender_name = email.get("sender_name", "Lirik NS ROM")
         self.form_url = (email.get("form_url") or "").rstrip("/")
         self.config_set = email.get("configuration_set")
         self.cc_owner = web_cfg.get("reviewers", {}).get("lirik_presales_owner_email")
@@ -44,7 +46,7 @@ class Mailer:
     def build(self, kind, req, **ctx):
         to = intake.address_of(req)
         msg = EmailMessage()
-        msg["From"], msg["To"] = self.sender, to
+        msg["From"], msg["To"] = formataddr((self.sender_name, self.sender)), to
         meta = json.loads(req.get("meta_json") or "{}")
         if kind == "approved":
             doc = pdf.content(req, ctx["interp"], ctx["results"], self.policy, meta.get("currency", "USD"))

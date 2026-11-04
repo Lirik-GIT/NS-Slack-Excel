@@ -10,6 +10,7 @@ import os
 import re
 import time
 import uuid
+from email.utils import formataddr
 from functools import lru_cache
 from html import escape
 from pathlib import Path
@@ -149,7 +150,7 @@ def count(key, limit, ttl):
 
 
 def send_mail(to, subject, text):
-    aws("ses").send_email(Source=env("SENDER"), Destination={"ToAddresses": [to]}, ConfigurationSetName=env("CONFIG_SET"),
+    aws("ses").send_email(Source=formataddr((env("SENDER_NAME", "Lirik NS ROM"), env("SENDER"))), Destination={"ToAddresses": [to]}, ConfigurationSetName=env("CONFIG_SET"),
                           Message={"Subject": {"Data": clean_text(subject, 150)}, "Body": {"Text": {"Data": text}}})
 
 

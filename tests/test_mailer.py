@@ -48,7 +48,7 @@ def test_approved_email_has_pdf_cc_and_no_internals(setup):
     call = ses.calls[0]
     msg = parsed(call)
     assert mid == "mid-1" and call["Destinations"] == ["ae@oracle.com", "owner@lirik.example"] and call["ConfigurationSetName"] == "cs"
-    assert msg["From"] == "estimates@lirik.example" and msg["Cc"] == "owner@lirik.example" and msg["Bcc"] is None
+    assert msg["From"] == "Lirik NS ROM <estimates@lirik.example>" and msg["Cc"] == "owner@lirik.example" and msg["Bcc"] is None
     assert "\n" not in msg["Subject"] and "evil@example.com" not in str(msg["To"]) + str(msg["Cc"])
     assert [p.get_content_type() for p in msg.iter_attachments()] == ["application/pdf"]
     assert msg.get_body().get_content().count("C$21,000") == 1 and "$" in msg.get_body().get_content()

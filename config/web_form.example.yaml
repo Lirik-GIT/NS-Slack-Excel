@@ -27,6 +27,7 @@ retention_days:
   sqs_message_days: 14
 email:
   sender: estimates@lirik.example
+  sender_name: Lirik NS ROM                   # display name in the From line
   region: us-east-1
   form_url: https://forms.example.invalid     # base URL of the form; resubmit links are built on it
   configuration_set: ns-estimator-events      # SES config set that publishes bounces/complaints
