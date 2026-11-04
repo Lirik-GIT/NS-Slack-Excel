@@ -128,11 +128,11 @@ Alarms go to `ns-estimator-alerts`: queue age over 30 min (bot down), anything i
 
 | # | Decision | Suggested answer | Owner |
 |---|---|---|---|
-| D1 | **Decided:** pilot AEs are `updesh.singh@lirik.io` and `komaldeep@lirik.io`. Still open: the presales owner on cc. | Set `lirik_presales_owner_email` in `web_form.yaml` | Sales Director |
+| D1 | **Decided:** pilot AEs are `updesh.singh@lirik.io` and `komaldeep@lirik.io`. **Decided:** cc owner is `komaldeep@lirik.io` (set `reviewers.lirik_presales_owner_email` in the host's `web_form.yaml`). | none | Sales Director |
 | D2 | Sender address and the form's public name (`estimates@lirik.io`, `estimate.lirik.io`) | As shown | CTO |
 | D3 | **Decided:** AI spend about $5 a day. The Anthropic console only has a monthly limit, so set it to $150 and check the daily figure (see COSTS.md) | Monthly limit $150 | Both |
 | D4 | Who backs up the primary reviewer, and does the 1 business day promise hold on holidays and weekends? | Named backup; the 4-hour reminder already skips weekends | Sales Director |
-| D5 | **Decided:** privacy notice stays a draft. It must be approved before any real Oracle AE uses the form (lirik.io pilot users only until then) | Review the text in `lambda/form/page.html` | Both |
+| D5 | **Decided:** privacy notice approved. Keep the text in `lambda/form/page.html` in step with what was approved; re-approval is needed if it changes | none | Both |
 | D6 | **Decided:** keep the current USD and CAD handling (CAD range = USD range scaled by the workbook's own ratio, rounded to 1,000) | none | Sales Director |
 | D7 | Over-limit or unapproved AEs see the normal success message and get no email (no probing of the approved list) | Accept for the pilot | Both |
 | D8 | **Decided:** keep the 5 stale staffing tests for now (deselected) | none | CTO |
