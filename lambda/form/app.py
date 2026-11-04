@@ -22,7 +22,7 @@ import tokens
 HERE = Path(__file__).parent
 OPTIONS = json.loads((HERE / "options.json").read_text(encoding="utf-8"))
 PAGE = (HERE / "page.html").read_text(encoding="utf-8")
-EMAIL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@oracle\.com$", re.IGNORECASE)
+LOCAL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}$")
 ALLOWED_TYPES = {"pdf": (b"%PDF-",), "docx": (b"PK\x03\x04",), "xlsx": (b"PK\x03\x04",)}
 MAX_FILES, MAX_BYTES, MAX_BODY = 3, 10 * 1024 * 1024, 20_000
 DAY = 86400
@@ -100,7 +100,8 @@ def validate(body):
     text("opportunity", 0, 400)
     text("requirement", 20, 3000, multiline=True)
     f["email"] = clean_text(body.get("email", ""), 254).lower()
-    if not EMAIL.match(f["email"]):
+    local, _, domain = f["email"].rpartition("@")
+    if not LOCAL.match(local) or domain not in re.split(r"[\s,;]+", env("EMAIL_DOMAINS", "oracle.com").lower()):
         bad.append("email")
     f["deal_type"] = body.get("deal_type")
     if f["deal_type"] not in OPTIONS["deal_types"]:

@@ -26,6 +26,10 @@ Parameters:
     Type: String
     Default: ""
     Description: Instance role of the estimator. If set, the read-only queue/mail/attachment policy is attached to it
+  EmailDomains:
+    Type: String
+    Default: oracle.com
+    Description: Domains whose addresses may use the form (comma separated). Pilot with Lirik staff - oracle.com,lirik.io
   DailyLimit:
     Type: Number
     Default: 10
@@ -187,6 +191,7 @@ Resources:
           CONFIG_SET: !Ref SesConfigurationSet
           HMAC_PARAM: !Ref HmacKeyParameter
           APPROVED_PARAM: !Ref ApprovedEmailsParameter
+          EMAIL_DOMAINS: !Ref EmailDomains
           DAILY_LIMIT: !Ref DailyLimit
           IP_HOURLY_LIMIT: !Ref IpHourlyLimit
           CAPTCHA_SCRIPT_URL: !Ref CaptchaScriptUrl

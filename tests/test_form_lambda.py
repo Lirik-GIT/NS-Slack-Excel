@@ -160,3 +160,9 @@ def test_upload_urls_reject_bad_files(lam):
 
 def test_template_and_form_files_exist():
     assert (ROOT / "infra" / "oracle-web-form" / "template.yaml").exists() and Path(FORM_DIR / "page.html").exists()
+
+
+def test_email_domains_setting(lam, monkeypatch):
+    monkeypatch.setenv("EMAIL_DOMAINS", "oracle.com, lirik.example")
+    assert form.validate({**GOOD, "email": "Pilot@Lirik.example"})[1] == []
+    assert form.validate({**GOOD, "email": "a@lirik.example.evil.io"})[1] == ["email"]

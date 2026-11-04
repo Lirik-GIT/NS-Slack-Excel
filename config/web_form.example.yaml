@@ -1,6 +1,7 @@
 # Copy to web_form.yaml (gitignored). Placeholders only: no real people, emails or keys.
 pilot:
-  approved_ae_emails:            # exact addresses; only @oracle.com accepted
+  allowed_domains: [oracle.com]  # pilot with Lirik staff: add lirik.io here and in the stack parameter EmailDomains
+  approved_ae_emails:            # exact addresses (the live list is the SSM parameter)
     - ae.one@oracle.example
     - ae.two@oracle.example
   regions: [US, CA]

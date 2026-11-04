@@ -52,7 +52,7 @@ Create these with the AWS CLI or console. Never put values in git, chat or `.env
 aws ssm put-parameter --name /ns-estimator/WEB_HMAC_KEY --type SecureString --value "$(openssl rand -base64 48)"
 
 # the pilot AEs allowed to use the form (comma or newline separated)
-aws ssm put-parameter --name /ns-estimator/web/approved_ae_emails --type String --value "<ae1>@oracle.com,<ae2>@oracle.com"
+aws ssm put-parameter --name /ns-estimator/web/approved_ae_emails --type String --value "updesh.singh@lirik.io,komaldeep@lirik.io"
 ```
 - The last path segment of the key **must stay `WEB_HMAC_KEY`**: the bot starts with `SSM_PREFIX=/ns-estimator`, which loads direct children of that path as environment variables.
 - Do **not** create a second copy of the key under `/ns-estimator/web/`. A different value means resubmit links (signed by the bot, checked by the Lambda) never verify. (Found and fixed in Phase 5: the stack default was a different path.)
@@ -70,7 +70,7 @@ sam deploy --guided --stack-name ns-estimator-web-form \
   --parameter-overrides AlertTopicArn=<existing ns-estimator-alerts topic ARN> Ec2RoleName=<instance role name> \
                         FormBaseUrl=<custom form URL, see step 8, or leave empty first>
 ```
-Keep the defaults for the rest (`SenderAddress=estimates@lirik.io`, `SenderDomain=lirik.io`, limits). Save the outputs: `FormUrl`, `SubmissionsQueueUrl`, `SesEventsQueueUrl`, `AttachmentsBucketName`, `DkimTokens`.
+For the Lirik-staff pilot add `EmailDomains=oracle.com,lirik.io` (the form accepts only `oracle.com` by default). Keep the defaults for the rest (`SenderAddress=estimates@lirik.io`, `SenderDomain=lirik.io`, limits). Save the outputs: `FormUrl`, `SubmissionsQueueUrl`, `SesEventsQueueUrl`, `AttachmentsBucketName`, `DkimTokens`.
 
 ## 6. Manual step: WAF CAPTCHA keys
 CloudFormation cannot create these.
@@ -81,7 +81,7 @@ CloudFormation cannot create these.
 
 ## 7. Estimator host: config, SQLite migration, restart
 1. **Back up first**: snapshot the EBS volume, and `docker cp` or copy `/srv/data/estimator.db` somewhere safe.
-2. Create `web_form.yaml` on the host from `config/web_form.example.yaml` (real sender, reviewers, `form_url` = the public form URL, `configuration_set` = the stack's set name, owner email for cc). It is gitignored. It does not hold the AE list (that is in SSM) or any secret.
+2. Create `web_form.yaml` on the host from `config/web_form.example.yaml`; set `pilot.allowed_domains: [oracle.com, lirik.io]` to match the stack (real sender, reviewers, `form_url` = the public form URL, `configuration_set` = the stack's set name, owner email for cc). It is gitignored. It does not hold the AE list (that is in SSM) or any secret.
 3. Add to the host's `.env` (no secrets, only names):
    ```
    SSM_PREFIX=/ns-estimator
@@ -128,13 +128,13 @@ Alarms go to `ns-estimator-alerts`: queue age over 30 min (bot down), anything i
 
 | # | Decision | Suggested answer | Owner |
 |---|---|---|---|
-| D1 | Which two AEs run the pilot, and who is the Lirik presales owner on cc? | Two named AEs; the presales lead | Sales Director |
+| D1 | **Decided:** pilot AEs are `updesh.singh@lirik.io` and `komaldeep@lirik.io`. Still open: the presales owner on cc. | Set `lirik_presales_owner_email` in `web_form.yaml` | Sales Director |
 | D2 | Sender address and the form's public name (`estimates@lirik.io`, `estimate.lirik.io`) | As shown | CTO |
-| D3 | Monthly AI spend cap per estimate and per month (see COSTS.md) | $100 per month cap in the Anthropic console | Both |
+| D3 | **Decided:** AI spend about $5 a day. The Anthropic console only has a monthly limit, so set it to $150 and check the daily figure (see COSTS.md) | Monthly limit $150 | Both |
 | D4 | Who backs up the primary reviewer, and does the 1 business day promise hold on holidays and weekends? | Named backup; the 4-hour reminder already skips weekends | Sales Director |
-| D5 | Does legal approve the privacy notice on the form (what is kept, for how long, who sees it)? | Review the text in `lambda/form/page.html`; retention is 90 days for attachments, 365 for estimates | Both |
-| D6 | CAD range method: USD range scaled by the workbook's own CAD/USD ratio, rounded to 1,000 | Accept, or give a fixed rate | Sales Director |
+| D5 | **Decided:** privacy notice stays a draft. It must be approved before any real Oracle AE uses the form (lirik.io pilot users only until then) | Review the text in `lambda/form/page.html` | Both |
+| D6 | **Decided:** keep the current USD and CAD handling (CAD range = USD range scaled by the workbook's own ratio, rounded to 1,000) | none | Sales Director |
 | D7 | Over-limit or unapproved AEs see the normal success message and get no email (no probing of the approved list) | Accept for the pilot | Both |
-| D8 | Delete the 5 stale staffing tests and `app/staffing.py` (deselected today) | Delete in a separate commit | CTO |
-| D9 | Commit `CLAUDE.md`, `MASTER_PROMPT.md`, `README.md` (untracked) and push the branch | Yes, then open a pull request | CTO |
+| D8 | **Decided:** keep the 5 stale staffing tests for now (deselected) | none | CTO |
+| D9 | **Decided:** commit everything and push the branch. Still open: pull request and merge | Open a pull request | CTO |
 | D10 | DMARC policy after the pilot (`none` → `quarantine`) | Move after one clean week | CTO |

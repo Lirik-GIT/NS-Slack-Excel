@@ -15,7 +15,8 @@ from .questions import ADDON, ADDON_OPTIONS, AREA_OPTIONS, NEW
 
 log = logging.getLogger("ns_estimator.intake")
 
-EMAIL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@oracle\.com$", re.IGNORECASE)
+LOCAL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}$")
+DEFAULT_DOMAINS = ("oracle.com",)
 CURRENCIES = ("USD", "CAD")
 SOURCE = "web"
 VISIBILITY_TIMEOUT = 300  # seconds; covers attachment downloads before the row is written
@@ -48,7 +49,7 @@ def _text(body, key, lo, hi, required=True):
     return value.strip()
 
 
-def parse(body, countries, limits):
+def parse(body, countries, limits, domains=DEFAULT_DOMAINS):
     """Validate a queue message (written by the form Lambda) and turn it into request fields. Raises InvalidMessage."""
     if not isinstance(body, dict):
         raise InvalidMessage("message is not an object")
@@ -56,8 +57,9 @@ def parse(body, countries, limits):
     if not re.fullmatch(r"[A-Za-z0-9-]+", sid):
         raise InvalidMessage("submission_id has unexpected characters")
     email = _text(body, "email", 6, 254)
-    if not EMAIL.match(email):
-        raise InvalidMessage("email is not an @oracle.com address")
+    local, _, domain = email.lower().rpartition("@")
+    if not LOCAL.match(local) or domain not in domains:
+        raise InvalidMessage("email is not from an allowed domain")
     deal = body.get("deal_type")
     if deal not in (NEW, ADDON):
         raise InvalidMessage("deal_type is not one of the two deal types")
@@ -108,6 +110,7 @@ class Intake:
         self.queue_url, self.bucket = queue_url, bucket
         self.countries = web_cfg["countries"]
         self.limits = web_cfg["limits"]["attachments"]
+        self.domains = tuple(web_cfg.get("pilot", {}).get("allowed_domains") or DEFAULT_DOMAINS)
         self.stop = stop
 
     def run(self):
@@ -134,7 +137,7 @@ class Intake:
 
     def handle(self, msg):
         try:
-            data = parse(json.loads(msg["Body"]), self.countries, self.limits)
+            data = parse(json.loads(msg["Body"]), self.countries, self.limits, self.domains)
         except (InvalidMessage, ValueError) as exc:
             log.error("Invalid web message %s left on the queue for the DLQ: %s", msg.get("MessageId"), exc)
             return

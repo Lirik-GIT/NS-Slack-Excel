@@ -227,3 +227,9 @@ def _old_schema(cx):
                     "template_sha256 varchar(64), model varchar(100), error text)"))
     cx.execute(text("insert into estimate_requests (id, created_at, updated_at, requester_id, customer, requirement, strategic, status, version) "
                     "values ('OLD1', '2026-10-01', '2026-10-01', 'U1', 'Acme', 'req', 0, 'delivered', 1)"))
+
+
+def test_parse_allowed_domains():
+    assert parse(message(email="ae@lirik.example"), ["US", "CA"], LIMITS, ("oracle.com", "lirik.example"))["email"] == "ae@lirik.example"
+    with pytest.raises(InvalidMessage):
+        parse(message(email="ae@lirik.example"), ["US", "CA"], LIMITS)  # default is oracle.com only

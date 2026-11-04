@@ -17,7 +17,7 @@ Prices are AWS list prices in us-east-1 as I remember them; check the AWS pricin
 **Total for the pilot: about $20–35 a month.** The WAF is the only fixed cost that matters; it stays the same at 20 or 200 requests.
 
 ## Spend cap for the AI
-- Set a **monthly spend limit** on the Anthropic workspace that holds the estimator key (console → workspace → limits). Suggested: $100 for the pilot, which is roughly 100 to 300 estimates.
+- **Decided target: about $5 a day.** As far as I know the Anthropic console limits spend per month, not per day, so set the workspace limit (console → workspace → limits) to **$150** (5 × 30) and check the daily figure in the console. A true daily cap would need code in the bot; not built. At the assumed $0.30–1.00 an estimate, $5 a day is 5 to 16 estimates a day, far above the pilot volume.
 - Note the first 10 requests' cost from the console and update this table.
 - The form already limits each AE to 10 requests a day and the whole site by IP, so abuse cannot spend without bound, but only the console limit gives a hard stop.
 - When the cap is reached, requests fail after 3 tries: the AE gets the generic "reviewing manually" email and the reviewer sees the error in Slack.
