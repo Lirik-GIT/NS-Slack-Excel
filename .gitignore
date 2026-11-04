@@ -7,3 +7,4 @@ data/
 acceptance/results.json
 .sf/
 config/web_form.yaml
+.coverage
