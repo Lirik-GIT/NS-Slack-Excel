@@ -70,7 +70,7 @@ sam deploy --guided --stack-name ns-estimator-web-form \
   --parameter-overrides AlertTopicArn=<existing ns-estimator-alerts topic ARN> Ec2RoleName=<instance role name> \
                         FormBaseUrl=<custom form URL, see step 8, or leave empty first>
 ```
-For the Lirik-staff pilot add `EmailDomains=oracle.com,lirik.io` (the form accepts only `oracle.com` by default). Keep the defaults for the rest (`SenderAddress=estimates@lirik.io`, `SenderDomain=lirik.io`, limits). Save the outputs: `FormUrl`, `SubmissionsQueueUrl`, `SesEventsQueueUrl`, `AttachmentsBucketName`, `DkimTokens`.
+For the Lirik-staff pilot add `EmailDomains=oracle.com,lirik.io` (the form accepts only `oracle.com` by default). Keep the defaults for the rest (`SenderAddress=komaldeep@lirik.io`, `SenderDomain=lirik.io`, limits). Save the outputs: `FormUrl`, `SubmissionsQueueUrl`, `SesEventsQueueUrl`, `AttachmentsBucketName`, `DkimTokens`.
 
 ## 6. Manual step: WAF CAPTCHA keys
 CloudFormation cannot create these.
@@ -129,7 +129,7 @@ Alarms go to `ns-estimator-alerts`: queue age over 30 min (bot down), anything i
 | # | Decision | Suggested answer | Owner |
 |---|---|---|---|
 | D1 | **Decided:** pilot AEs are `updesh.singh@lirik.io` and `komaldeep@lirik.io`. **Decided:** cc owner is `komaldeep@lirik.io` (set `reviewers.lirik_presales_owner_email` in the host's `web_form.yaml`). | none | Sales Director |
-| D2 | Sender address and the form's public name (`estimates@lirik.io`, `estimate.lirik.io`) | As shown | CTO |
+| D2 | **Decided:** sender is `komaldeep@lirik.io`, form name is "NS ROM Form". Still open: the public web address (for example `estimate.lirik.io`), see step 8 | Custom domain | CTO |
 | D3 | **Decided:** AI spend about $5 a day. The Anthropic console only has a monthly limit, so set it to $150 and check the daily figure (see COSTS.md) | Monthly limit $150 | Both |
 | D4 | Who backs up the primary reviewer, and does the 1 business day promise hold on holidays and weekends? | Named backup; the 4-hour reminder already skips weekends | Sales Director |
 | D5 | **Decided:** privacy notice approved. Keep the text in `lambda/form/page.html` in step with what was approved; re-approval is needed if it changes | none | Both |

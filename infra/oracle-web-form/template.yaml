@@ -5,7 +5,7 @@ Description: NS Estimator - Oracle AE web form (API Gateway REST + WAF, form Lam
 Parameters:
   SenderAddress:
     Type: String
-    Default: estimates@lirik.io
+    Default: komaldeep@lirik.io
     Description: From address for every email to AEs (must belong to SenderDomain)
   SenderDomain:
     Type: String

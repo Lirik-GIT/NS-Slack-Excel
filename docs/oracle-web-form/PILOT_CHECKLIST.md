@@ -10,7 +10,7 @@ Oracle's mail filters are the biggest unknown, so test delivery before any real 
 - [ ] The link opens the page, and the "received" email follows.
 - [ ] Approve in Slack. The PDF email arrives with the PDF attached and opens correctly (phone and desktop).
 - [ ] Ask the AE to check the headers: DKIM pass, SPF pass, DMARC pass.
-- [ ] If anything lands in spam: ask Oracle IT to allow-list `estimates@lirik.io`, try a custom MAIL FROM domain, then repeat.
+- [ ] If anything lands in spam: ask Oracle IT to allow-list `komaldeep@lirik.io`, try a custom MAIL FROM domain, then repeat.
 - [ ] The PDF layout was only checked as extracted text during development. Open it and look at it: title, ROM range, sections, wrapping, the disclaimer. Fix layout before launch.
 
 ## B. Checks only a person can do
