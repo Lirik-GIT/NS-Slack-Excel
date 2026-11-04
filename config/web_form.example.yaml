@@ -16,6 +16,7 @@ limits:
   requests_per_ae_per_day: 10
   attachments: {max_files: 3, max_mb_each: 10, types: [pdf, docx, xlsx]}
   confirmation_link_hours: 24
+  resubmit_link_days: 14
 countries: [US, CA]              # others flagged "excluded localization"
 currencies: [USD, CAD]
 retention_days:
@@ -26,6 +27,8 @@ retention_days:
 email:
   sender: estimates@lirik.example
   region: us-east-1
+  form_url: https://forms.example.invalid     # base URL of the form; resubmit links are built on it
+  configuration_set: ns-estimator-events      # SES config set that publishes bounces/complaints
 queue:
   max_receive_count: 3
   alarm_age_minutes: 30

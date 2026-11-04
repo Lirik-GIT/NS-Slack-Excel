@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
+import boto3
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
@@ -19,6 +20,8 @@ from .catalog import load_catalog
 from .config import load_guide, load_policy, load_settings, load_web_form
 from .estimator import Estimator
 from .interpreter import Interpreter
+from .mailer import Mailer, poll_events
+from .pdf import PdfRenderer
 from .question_bank import load_bank
 from .store import Store
 from .workbook import Recalculator
@@ -426,6 +429,13 @@ class EstimatorBot:
             sqs, s3 = intake.make_clients()
             poller = intake.Intake(self, sqs, s3, self.s.web_queue_url, self.s.web_attachments_bucket, self.web, self.stop)
             poller.resume()
+            ses = boto3.client("ses", region_name=self.web.get("email", {}).get("region", "us-east-1"))
+            self.mailer = Mailer(self.store, ses, self.web, self.policy,
+                                 PdfRenderer(self.s.soffice_path, self.s.data_dir / "lo-profile-pdf", self.s.recalc_timeout),
+                                 self.s.web_hmac_key)
+            if self.s.web_events_queue_url:
+                threading.Thread(target=poll_events, name="ses-events", daemon=True, args=(
+                    self.store, sqs, self.s.web_events_queue_url, self.app.client, self.review_channel(self.app.client), self.stop)).start()
             threading.Thread(target=poller.run, name="web-intake", daemon=True).start()
             threading.Thread(target=reminder.run, args=(self, self.stop), name="web-reminder", daemon=True).start()
         try:

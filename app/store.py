@@ -105,6 +105,15 @@ class Store:
             row = cx.execute(select(requests).where(requests.c.submission_id == submission_id)).mappings().first()
         return dict(row) if row else None
 
+    def by_message_id(self, message_id):
+        """The request an SES message id belongs to (recorded as an email_sent event)."""
+        if not message_id:
+            return None
+        with self.engine.connect() as cx:
+            rid = cx.execute(select(events.c.request_id).where(
+                events.c.kind == "email_sent", events.c.detail_json.like(f'%"{message_id}"%'))).scalar()
+        return self.get(rid) if rid else None
+
     def by_source_status(self, source, statuses):
         with self.engine.connect() as cx:
             rows = cx.execute(select(requests).where(requests.c.source == source, requests.c.status.in_(statuses))).mappings().all()

@@ -2,3 +2,4 @@
 pytest==8.3.3
 ruff==0.7.1
 moto[sqs,s3,ses,ssm]==5.0.18
+pypdf==5.1.0

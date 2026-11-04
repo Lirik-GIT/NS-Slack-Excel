@@ -31,6 +31,8 @@ class Settings:
     worker_threads: int = 4
     web_queue_url: str = ""  # empty = web intake off
     web_attachments_bucket: str = ""
+    web_events_queue_url: str = ""  # SES bounce/complaint events
+    web_hmac_key: str = field(default="", repr=False)  # signs the resubmit link; from SSM
     web_form_path: Path = BASE_DIR / "config" / "web_form.yaml"
     web_retry_delay: float = 10.0  # seconds between the 3 estimate attempts for web requests
 
@@ -92,6 +94,8 @@ def load_settings():
         worker_threads=int(os.environ.get("WORKER_THREADS", "4")),
         web_queue_url=os.environ.get("WEB_QUEUE_URL", ""),
         web_attachments_bucket=os.environ.get("WEB_ATTACHMENTS_BUCKET", ""),
+        web_events_queue_url=os.environ.get("WEB_EVENTS_QUEUE_URL", ""),
+        web_hmac_key=os.environ.get("WEB_HMAC_KEY", ""),
         web_form_path=config_dir / "web_form.yaml",
         web_retry_delay=float(os.environ.get("WEB_RETRY_DELAY", "10")),
     )
