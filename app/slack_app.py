@@ -1,18 +1,22 @@
 import hashlib
 import json
 import logging
+import threading
+import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from . import intake, reminder
 from . import slack_ui as ui
 from .catalog import load_catalog
-from .config import load_guide, load_policy, load_settings
+from .config import load_guide, load_policy, load_settings, load_web_form
 from .estimator import Estimator
 from .interpreter import Interpreter
 from .question_bank import load_bank
@@ -48,6 +52,9 @@ class EstimatorBot:
                                    settings.template_path, settings.data_dir / "files")
         self.pool = ThreadPoolExecutor(max_workers=settings.worker_threads)
         self._review_channel = None
+        self.web = load_web_form(settings.web_form_path)
+        self.mailer = None  # set by the SES sender (phase 2); web requests are emailed through it
+        self.stop = threading.Event()
         self.app = App(token=settings.slack_bot_token)
         self._register()
 
@@ -68,6 +75,23 @@ class EstimatorBot:
     def _dm(self, client, user_id, text, blocks=None):
         channel = client.conversations_open(users=user_id)["channel"]["id"]
         client.chat_postMessage(channel=channel, text=text, blocks=blocks)
+
+    def _email(self, client, req, kind, **ctx):
+        """Web requesters hear back by email only. kind: approved | returned | failed. Never carries internal detail."""
+        who = intake.mask_email(intake.address_of(req))
+        try:
+            if self.mailer is None:
+                raise RuntimeError("no email sender configured")
+            self.mailer.send(kind, req, **ctx)
+            log.info("Emailed %s to %s for request %s", kind, who, req["id"])
+        except Exception as exc:
+            log.exception("Email %s to %s failed for %s", kind, who, req["id"])
+            try:
+                client.chat_postMessage(channel=req.get("review_channel") or self.review_channel(client),
+                                        thread_ts=req.get("review_ts"),
+                                        text=f"Email ({kind}) to {who} for request {req['id']} was not sent: {str(exc)[:300]}")
+            except Exception:
+                log.exception("Could not report the email failure for %s", req["id"])
 
     def _log(self, client, rid):
         req = self.store.get(rid)
@@ -139,8 +163,10 @@ class EstimatorBot:
             if not self._can_review(user_id):
                 client.chat_postEphemeral(channel=body["channel"]["id"], user=user_id, text="Only the estimate reviewer can send estimates back.")
                 return
+            req = self.store.get(body["actions"][0]["value"]) or {}
             client.views_open(trigger_id=body["trigger_id"],
-                              view=ui.return_modal(body["actions"][0]["value"], body["channel"]["id"], body["message"]["ts"]))
+                              view=ui.return_modal(body["actions"][0]["value"], body["channel"]["id"], body["message"]["ts"],
+                                                   external=req.get("source") == "web"))
 
         @app.view(ui.RETURN_VIEW)
         def submit_return(ack, body, client, view):
@@ -156,8 +182,11 @@ class EstimatorBot:
                 return
             req = self.store.get(rid)
             self._refresh_card(client, rid, decided_by=user_id, note=note)
-            self._dm(client, req["requester_id"],
-                     f"More detail is needed before the ROM for *{req['customer']}* can be released (request {rid}):\n> {note}\nRun /ns-estimate again with the added detail.")
+            if req["source"] == "web":
+                self._email(client, req, "returned", note=note)
+            else:
+                self._dm(client, req["requester_id"],
+                         f"More detail is needed before the ROM for *{req['customer']}* can be released (request {rid}):\n> {note}\nRun /ns-estimate again with the added detail.")
             self._log(client, rid)
 
         @app.action(ui.PRICING_ACTION)
@@ -215,22 +244,37 @@ class EstimatorBot:
     def _run(self, client, rid):
         req = self.store.get(rid)
         self.store.update(rid, actor="bot", event="estimating", status="estimating")
-        try:
-            form = json.loads(req["form_json"] or "{}")
-            est = self.estimator.estimate(rid, req["customer"], req["requirement"], form, req["strategic"])
-        except Exception as exc:
-            log.exception("Estimate %s failed", rid)
-            self.store.update(rid, actor="bot", event="failed", detail={"error": str(exc)}, status="failed", error=str(exc)[:2000])
-            self._dm(client, req["requester_id"],
-                     f"I couldn't produce the ROM for *{req['customer']}* (request {rid}). Presales has been notified.\nReason: {str(exc)[:300]}")
+        web = req["source"] == "web"
+        meta = json.loads(req["meta_json"] or "{}")
+        attempts = 3 if web else 1  # web requesters cannot retry from Slack, so the bot retries for them
+        for attempt in range(1, attempts + 1):
             try:
-                client.chat_postMessage(channel=self.review_channel(client),
-                                        text=f"Estimate {rid} for {req['customer']} by <@{req['requester_id']}> failed: {str(exc)[:500]}")
-            except Exception:
-                log.exception("Could not notify review channel for %s", rid)
-            self._log(client, rid)
-            return
+                form = json.loads(req["form_json"] or "{}")
+                est = self.estimator.estimate(rid, req["customer"], req["requirement"], form, req["strategic"])
+                break
+            except Exception as exc:
+                log.exception("Estimate %s failed (attempt %s of %s)", rid, attempt, attempts)
+                if attempt < attempts:
+                    self.store.update(rid, actor="bot", event="retry", detail={"attempt": attempt, "error": str(exc)})
+                    time.sleep(self.s.web_retry_delay)
+                    continue
+                self.store.update(rid, actor="bot", event="failed", detail={"error": str(exc)}, status="failed", error=str(exc)[:2000])
+                if web:  # external requesters get a generic message; the detail goes to the review channel only
+                    self._email(client, self.store.get(rid), "failed")
+                else:
+                    self._dm(client, req["requester_id"],
+                             f"I couldn't produce the ROM for *{req['customer']}* (request {rid}). Presales has been notified.\nReason: {str(exc)[:300]}")
+                try:
+                    client.chat_postMessage(channel=self.review_channel(client),
+                                            text=f"Estimate {rid} for {req['customer']} by {ui.requester_label(req)} failed"
+                                                 f"{f' after {attempts} attempts' if web else ''}: {str(exc)[:500]}")
+                except Exception:
+                    log.exception("Could not notify review channel for %s", rid)
+                self._log(client, rid)
+                return
 
+        if web and not meta.get("in_pilot_country", True):
+            est.reasons.append(f"Customer country {meta.get('country')} is outside US and Canada: excluded localization")
         interp = {**est.scope.to_dict(), "line_hours": est.line_hours, "versions": self.versions}
         results = asdict(est.results)
         self.store.update(rid, actor="bot", event="estimated",
@@ -243,13 +287,20 @@ class EstimatorBot:
         except Exception as exc:
             log.exception("Routing %s failed", rid)
             self.store.update(rid, actor="bot", event="failed", detail={"error": str(exc)}, status="failed", error=str(exc)[:2000])
-            self._dm(client, req["requester_id"],
-                     f"Your ROM for *{req['customer']}* was calculated but could not be delivered (request {rid}). Presales has been notified.")
+            if web:
+                self._email(client, self.store.get(rid), "failed")
+            else:
+                self._dm(client, req["requester_id"],
+                         f"Your ROM for *{req['customer']}* was calculated but could not be delivered (request {rid}). Presales has been notified.")
         self._log(client, rid)
 
     def _route(self, client, rid, est, interp, results):
+        web = self.store.get(rid)["source"] == "web"
+        if web and not est.reasons:  # nothing reaches an external AE without a reviewer, whatever the policy says
+            est.reasons.append("Web-form requests are always reviewed before they go to the AE")
+            self.store.update(rid, review_reasons_json=est.reasons)
         if est.reasons:
-            self.store.update(rid, actor="bot", event="sent_to_review", status="in_review")
+            self.store.update(rid, actor="bot", event="sent_to_review", status="in_review", review_at=datetime.now(timezone.utc))
             req = self.store.get(rid)
             blocks = ui.review_blocks(req, interp, results, est.reasons, "in_review")
             card = client.chat_postMessage(channel=self.review_channel(client), text=f"Review needed: {req['customer']}", blocks=blocks)
@@ -257,11 +308,27 @@ class EstimatorBot:
             client.files_upload_v2(channel=self.review_channel(client), thread_ts=card["ts"],
                                    file=str(est.workbook_path), filename=Path(est.workbook_path).name,
                                    title=f"{req['customer']} estimator v1")
-            self._dm(client, req["requester_id"],
-                     f"The ROM for *{req['customer']}* is calculated and with presales for review. You'll get it here once it's released. Request {rid}.")
+            if web:
+                self._share_attachments(client, req, card["ts"])
+            else:
+                self._dm(client, req["requester_id"],
+                         f"The ROM for *{req['customer']}* is calculated and with presales for review. You'll get it here once it's released. Request {rid}.")
         else:
             self._deliver(client, rid)
             self.store.update(rid, actor="bot", event="delivered", status="delivered")
+
+    def _share_attachments(self, client, req, thread_ts):
+        """The AE's attachments go to the reviewer thread only; the AI never reads them."""
+        for a in json.loads(self.store.get(req["id"])["meta_json"] or "{}").get("attachments", []):
+            try:
+                if not a.get("path"):
+                    raise FileNotFoundError("attachment could not be downloaded")
+                client.files_upload_v2(channel=req["review_channel"] or self.review_channel(client), thread_ts=thread_ts,
+                                       file=a["path"], filename=a["name"], title=f"AE attachment: {a['name']}")
+            except Exception:
+                log.exception("Attachment %s for %s not shared", a.get("name"), req["id"])
+                client.chat_postMessage(channel=self.review_channel(client), thread_ts=thread_ts,
+                                        text=f"Attachment {a.get('name')} from the AE could not be loaded; ask the AE to resend it.")
 
     def _apply_upload(self, client, rid, file_info, user_id, thread_ts):
         req = self.store.get(rid)
@@ -346,13 +413,25 @@ class EstimatorBot:
         interp = json.loads(req["interpretation_json"])
         results = json.loads(req["results_json"])
         title = f"NetSuite ROM: {req['customer']}"
+        if req["source"] == "web":
+            self._email(client, req, "approved", interp=interp, results=results, title=title, approved_by=approved_by)
+            return
         blocks = ui.ae_blocks(req, interp, results, self.policy, title)
         if approved_by:
             blocks.insert(1, {"type": "context", "elements": [{"type": "mrkdwn", "text": f"Reviewed and released by <@{approved_by}>"}]})
         self._dm(client, req["requester_id"], f"{title}: {ui._range(results)} USD, {results['weeks_total']} weeks", blocks)
 
     def start(self):
-        SocketModeHandler(self.app, self.s.slack_app_token).start()
+        if self.s.web_queue_url:
+            sqs, s3 = intake.make_clients()
+            poller = intake.Intake(self, sqs, s3, self.s.web_queue_url, self.s.web_attachments_bucket, self.web, self.stop)
+            poller.resume()
+            threading.Thread(target=poller.run, name="web-intake", daemon=True).start()
+            threading.Thread(target=reminder.run, args=(self, self.stop), name="web-reminder", daemon=True).start()
+        try:
+            SocketModeHandler(self.app, self.s.slack_app_token).start()
+        finally:
+            self.stop.set()  # let the pollers finish their current message and exit
 
 
 def main():

@@ -1,0 +1,4 @@
+line-length = 140
+
+[lint]
+ignore = ["E731"]  # existing lambda in app/question_bank.py; not refactored

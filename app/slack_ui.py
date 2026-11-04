@@ -1,3 +1,4 @@
+from .intake import address_of, mask_email
 from .questions import ADDON_OPTIONS, ADDON, AREA_OPTIONS, BY_ID, NEW, QUESTIONS
 
 REQUEST_VIEW = "ns_estimate_request"
@@ -115,7 +116,21 @@ def parse_request(values):
     }
 
 
-def return_modal(request_id, channel, ts):
+def requester_label(req, mask=False):
+    """Who asked: a Slack mention, or the web-form address (masked for the log channel)."""
+    if req.get("source") != "web":
+        return f"<@{req['requester_id']}>"
+    address = address_of(req)
+    return f"Web form: {mask_email(address) if mask else address}"
+
+
+def return_modal(request_id, channel, ts, external=False):
+    blocks = [{"type": "input", "block_id": "note",
+               "label": {"type": "plain_text", "text": "What does the AE need to clarify?"},
+               "element": {"type": "plain_text_input", "action_id": "value", "multiline": True, "max_length": 2000}}]
+    if external:
+        blocks.insert(0, {"type": "context", "elements": [{"type": "mrkdwn", "text":
+            ":warning: This note is emailed to an external Oracle AE. Do not include prices, rates, hours or internal comments."}]})
     return {
         "type": "modal",
         "callback_id": RETURN_VIEW,
@@ -123,9 +138,7 @@ def return_modal(request_id, channel, ts):
         "title": {"type": "plain_text", "text": "Ask AE for detail"},
         "submit": {"type": "plain_text", "text": "Send"},
         "close": {"type": "plain_text", "text": "Cancel"},
-        "blocks": [{"type": "input", "block_id": "note",
-                    "label": {"type": "plain_text", "text": "What does the AE need to clarify?"},
-                    "element": {"type": "plain_text_input", "action_id": "value", "multiline": True, "max_length": 2000}}],
+        "blocks": blocks,
     }
 
 
@@ -269,7 +282,7 @@ def ae_blocks(req, interp, results, policy, title):
 def review_blocks(req, interp, results, reasons, status, decided_by=None, note=None):
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": _cut(f"Review: {req['customer']}", 150)}},
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Requested by* <@{req['requester_id']}>  ·  *Status* {STATUS_LABEL[status]}  ·  Request {req['id']} v{req.get('version') or 1}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Requested by* {requester_label(req)}  ·  *Status* {STATUS_LABEL[status]}  ·  Request {req['id']} v{req.get('version') or 1}"}},
         {"type": "section", "fields": [
             {"type": "mrkdwn", "text": f"*ROM range (AE sees)*\n{_range(results)} USD"},
             {"type": "mrkdwn", "text": f"*Exact price*\n{_money(results['price'])} USD  ·  {_money(results['price_cad'])} CAD"},
@@ -328,7 +341,7 @@ def log_blocks(req, results, status):
     weeks = f"{results['weeks_total']} wks" if results else ""
     opp = f"  ·  {req['opportunity']}" if req.get("opportunity") else ""
     text = (f"*{req['customer']}*  ·  {fee}  {weeks}  ·  {STATUS_LABEL[status]}\n"
-            f"Requested by <@{req['requester_id']}>{opp}  ·  Request {req['id']}")
+            f"Requested by {requester_label(req, mask=True)}{opp}  ·  Request {req['id']}")
     if req.get("deal_type"):
         text += f"  ·  {req['deal_type']}"
     return [{"type": "section", "text": {"type": "mrkdwn", "text": _cut(text)}}]
