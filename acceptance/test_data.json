@@ -1,0 +1,27 @@
+{
+  "requester": "U0320DSJSK0",
+  "not_allowed_user": "U02D26N9S64",
+  "cases": {
+    "arm_addon": {
+      "customer": "UAT-1 RiverBed (ARM add-on)",
+      "form": {"Q01": "Add-on to existing account", "Q39": "Yes"},
+      "requirement": "RiverBed already runs NetSuite. They need Advanced Revenue Management set up. About 2,500 open contracts must be migrated. A scheduled script should recalculate revenue plans across two record types. Go-live is planned for March."
+    },
+    "new_impl": {
+      "customer": "UAT-3 Northwind Supplies (new implementation)",
+      "form": {"Q01": "New implementation", "Q02": 2, "Q07": "Yes", "Q08": "Yes"},
+      "requirement": "Northwind Supplies is a US distributor moving from QuickBooks to NetSuite. They have two subsidiaries, one in the US and one in Canada. They need procure-to-pay with a two-level purchase order approval. They also need order-to-cash with customer deposits. About 8,000 items and 1,200 customers must be migrated. Go-live is targeted for the start of next quarter."
+    },
+    "return": {
+      "customer": "UAT-4 RiverBed (returned to AE)",
+      "form": {"Q01": "Add-on to existing account", "Q39": "Yes"},
+      "requirement": "RiverBed already runs NetSuite. They need Advanced Revenue Management set up. About 2,500 open contracts must be migrated. A scheduled script should recalculate revenue plans across two record types. Go-live is planned for March.",
+      "return_note": "Please confirm whether the 2,500 contracts include closed contracts, and which two record types the script covers."
+    },
+    "nonsense": {
+      "customer": "UAT-5 Nonsense input",
+      "form": {"Q01": "Add-on to existing account"},
+      "requirement": "asdf qwerty zxcv lorem ipsum dolor sit amet blah blah."
+    }
+  }
+}

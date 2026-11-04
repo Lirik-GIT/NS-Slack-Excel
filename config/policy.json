@@ -1,0 +1,16 @@
+{
+  "review": {
+    "review_all": true,
+    "fee_threshold_usd": 75000,
+    "review_when_custom_items": true,
+    "review_when_strategic": true
+  },
+  "ae_message": {
+    "disclaimer": "Rough order of magnitude for early budgeting only. Not a quote. Final pricing follows discovery and an approved SOW.",
+    "max_scope_lines_shown": 15,
+    "max_questions_shown": 10
+  },
+  "standard_exclusions": [
+    "Country localization outside US and Canada excluded"
+  ]
+}

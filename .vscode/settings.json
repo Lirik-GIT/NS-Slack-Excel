@@ -1,0 +1,26 @@
+{
+    "[ampscript]": {
+        "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/.jj": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        ".mule": true
+    },
+    "[ssjs]": {
+        "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+    },
+    "[sfmc]": {
+        "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+    },
+    "[handlebars]": {
+        "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+    },
+    "[sql]": {
+        "editor.defaultFormatter": "joernberkefeld.sfmc-language"
+    }
+}
