@@ -16,8 +16,8 @@ Parameters:
     Description: Existing SNS topic for alarms (ns-estimator-alerts)
   HmacKeyParameter:
     Type: String
-    Default: /ns-estimator/web/hmac_key
-    Description: SSM SecureString holding the link-signing key (created by the admin, never in this template)
+    Default: /ns-estimator/WEB_HMAC_KEY
+    Description: SSM SecureString holding the link-signing key. The last path segment must stay WEB_HMAC_KEY so the estimator (SSM_PREFIX=/ns-estimator) loads the same key; created by the admin, never in this template
   ApprovedEmailsParameter:
     Type: String
     Default: /ns-estimator/web/approved_ae_emails
