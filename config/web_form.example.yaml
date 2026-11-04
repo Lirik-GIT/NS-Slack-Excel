@@ -1,0 +1,31 @@
+# Copy to web_form.yaml (gitignored). Placeholders only: no real people, emails or keys.
+pilot:
+  approved_ae_emails:            # exact addresses; only @oracle.com accepted
+    - ae.one@oracle.example
+    - ae.two@oracle.example
+  regions: [US, CA]
+reviewers:
+  primary_slack_user_id: U_PRIMARY_REVIEWER
+  backup_slack_user_id: U_BACKUP_REVIEWER
+  lirik_presales_owner_email: owner@lirik.example   # cc on approved emails
+sla:
+  turnaround: 1 business day
+  reviewer_reminder_business_hours: 4
+  business_hours: {days: [Mon, Tue, Wed, Thu, Fri], start: "09:00", end: "17:00", timezone: America/New_York}
+limits:
+  requests_per_ae_per_day: 10
+  attachments: {max_files: 3, max_mb_each: 10, types: [pdf, docx, xlsx]}
+  confirmation_link_hours: 24
+countries: [US, CA]              # others flagged "excluded localization"
+currencies: [USD, CAD]
+retention_days:
+  estimates: 365
+  attachments: 90
+  unconfirmed_submissions_hours: 24
+  sqs_message_days: 14
+email:
+  sender: estimates@lirik.example
+  region: us-east-1
+queue:
+  max_receive_count: 3
+  alarm_age_minutes: 30
