@@ -60,6 +60,13 @@ def test_pdf_has_allowed_content_and_no_canaries(renderer, currency, expected):
     assert "/hr" not in text and "blended" not in text.lower() and "rate" not in text.lower().replace("migration", "")
 
 
+def test_text_starting_with_equals_is_not_evaluated(renderer):
+    hostile = {**INTERP, "scope_summary": "=7777+1", "assumptions": ['=HYPERLINK("http://x","click")', "+1+1", "@SUM(1,2)"]}
+    req = {**REQ, "customer": "=1+1"}
+    text = text_of(renderer.render(pdf.content(req, hostile, RESULTS, POLICY), RESULTS))
+    assert "=7777+1" in text and "7778" not in text and "=1+1" in text and 'HYPERLINK("http://x"' in text
+
+
 def test_guard_refuses_internal_figures():
     doc = pdf.content(REQ, INTERP, RESULTS, POLICY)
     for bad in ("Total $7,777,001", "billed at $1,234.56 blended", "$988 onsite", "64 /hr"):

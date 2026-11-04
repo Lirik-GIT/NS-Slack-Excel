@@ -97,6 +97,7 @@ def _workbook(doc, owner):
     def put(text, font=None, fill=None):
         nonlocal row
         cell = ws.cell(row, 1, text)
+        cell.data_type = "s"  # AE-written text must never be evaluated as a spreadsheet formula (LibreOffice can read local files)
         cell.alignment = wrap
         if font:
             cell.font = font
