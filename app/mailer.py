@@ -52,7 +52,7 @@ class Mailer:
             if self.cc_owner:
                 msg["Cc"] = self.cc_owner
             msg.set_content(f"Hello,\n\nYour reviewed NetSuite ROM estimate for {one_line(req['customer'])} is attached.\n\n"
-                            f"{doc['headline']}\n{doc['meta'][0]}\n\n{doc['footer']}\n\nReference: {req['id']}\n\nLirik Pre-Sales")
+                            f"{doc['headline']}\n{doc['meta'][0]}\n\n{doc['footer']}\n\nReference: {pdf.reference(req)}\n\nLirik Pre-Sales")
             msg.add_attachment(self.renderer.render(doc, ctx["results"]), maintype="application", subtype="pdf",
                                filename=f"NetSuite_ROM_{file_name(req['customer'])}.pdf")
         elif kind == "returned":
@@ -60,10 +60,10 @@ class Mailer:
             msg.set_content(f"Hello,\n\nOur reviewer needs a little more detail before we can release the estimate for "
                             f"{one_line(req['customer'])}:\n\n{ctx['note'].strip()}\n\n"
                             f"Please resubmit with the added detail (your answers are pre-filled):\n{self.resubmit_link(req)}\n\n"
-                            f"Reference: {req['id']}\n\nLirik Pre-Sales")
+                            f"Reference: {pdf.reference(req)}\n\nLirik Pre-Sales")
         elif kind == "failed":
             msg["Subject"] = "Your NetSuite ROM request"
-            msg.set_content(f"Hello,\n\n{FAILED_TEXT}\n\nReference: {req['id']}\n\nLirik Pre-Sales")
+            msg.set_content(f"Hello,\n\n{FAILED_TEXT}\n\nReference: {pdf.reference(req)}\n\nLirik Pre-Sales")
         else:
             raise ValueError(f"unknown email kind {kind}")
         return msg

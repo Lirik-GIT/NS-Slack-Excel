@@ -1,0 +1,110 @@
+{
+ "deal_types": [
+  "New implementation",
+  "Add-on to existing account"
+ ],
+ "areas": [
+  [
+   "Q07",
+   "Procure to Pay"
+  ],
+  [
+   "Q08",
+   "Order to Cash"
+  ],
+  [
+   "Q09",
+   "Inventory"
+  ],
+  [
+   "Q21",
+   "Lead to Quote (CRM)"
+  ],
+  [
+   "Q23",
+   "Marketing"
+  ],
+  [
+   "Q24",
+   "Case management"
+  ],
+  [
+   "Q25",
+   "Work orders and assemblies"
+  ],
+  [
+   "Q26",
+   "WIP and routing"
+  ],
+  [
+   "Q27",
+   "Advanced manufacturing"
+  ],
+  [
+   "Q28",
+   "Project to Cash"
+  ],
+  [
+   "Q30",
+   "Resource to Project"
+  ],
+  [
+   "Q31",
+   "Advanced projects"
+  ],
+  [
+   "Q32",
+   "SuiteCommerce website"
+  ]
+ ],
+ "addons": [
+  [
+   "Q33",
+   "Amortization"
+  ],
+  [
+   "Q34",
+   "Expense allocation"
+  ],
+  [
+   "Q35",
+   "Demand planning"
+  ],
+  [
+   "Q36",
+   "MRP / MPS"
+  ],
+  [
+   "Q38",
+   "Fixed Assets"
+  ],
+  [
+   "Q39",
+   "Advanced Revenue Management (ARM)"
+  ],
+  [
+   "Q40",
+   "SuiteApprovals"
+  ],
+  [
+   "Q41",
+   "SuiteTax"
+  ],
+  [
+   "Q42",
+   "Commissions"
+  ],
+  [
+   "Q43",
+   "SuiteBilling"
+  ],
+  [
+   "Q44",
+   "Contract renewals"
+  ],
+  [
+   "Q45",
+   "Warranty and support"
+  ]
+ ]
+}

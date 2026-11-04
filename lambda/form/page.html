@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetSuite ROM estimate request</title>
+<style nonce="{{NONCE}}">
+  :root { --ink:#1b2430; --muted:#5b6673; --line:#d5dbe3; --accent:#1f5fa8; --bg:#f6f8fb; --err:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e8edf3; --muted:#a3adba; --line:#364150; --accent:#6aa7ee; --bg:#141a22; --err:#f2b8b5; } }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, sans-serif; }
+  main { max-width:44rem; margin:0 auto; padding:1.5rem 1rem 3rem; }
+  label, legend { display:block; font-weight:600; margin:1rem 0 .25rem; }
+  input[type=text], input[type=email], input[type=number], select, textarea { width:100%; box-sizing:border-box; padding:.5rem; font:inherit;
+    color:inherit; background:transparent; border:1px solid var(--line); border-radius:6px; }
+  fieldset { border:1px solid var(--line); border-radius:6px; margin:1rem 0; }
+  fieldset label { font-weight:400; margin:.25rem 0; }
+  .hint, .privacy { color:var(--muted); font-size:.9rem; }
+  .privacy { border-left:3px solid var(--accent); padding-left:.75rem; margin:1.25rem 0; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:.65rem 1.4rem; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  .err { color:var(--err); } #status { margin-top:1rem; min-height:1.5rem; }
+  .notice { background:var(--line); padding:.5rem .75rem; border-radius:6px; }
+</style>
+{{CAPTCHA_TAG}}
+</head>
+<body>
+<main>
+  <h1>Request a NetSuite ROM estimate</h1>
+  <p class="hint">A Lirik presales reviewer checks every estimate before it is sent to you by email, usually within 1 business day.</p>
+  <p id="notice" class="notice" hidden></p>
+  <form id="f" novalidate></form>
+  <div id="captcha"></div>
+  <div id="status" role="status" aria-live="polite"></div>
+</main>
+<script type="application/json" id="cfg" nonce="{{NONCE}}">{{CONFIG}}</script>
+<script nonce="{{NONCE}}">
+const cfg = JSON.parse(document.getElementById('cfg').textContent), pre = cfg.prefill || {};
+const form = document.getElementById('f'), status = document.getElementById('status');
+let uploadedId = null;
+function el(tag, props, ...kids) { const e = Object.assign(document.createElement(tag), props || {}); e.append(...kids); return e; }
+function field(label, input, hint) { return el('div', {}, el('label', {htmlFor: input.id, textContent: label}), input, hint ? el('div', {className: 'hint', textContent: hint}) : '' ); }
+function text(id, type, max, value) { return el('input', {id, name: id, type, maxLength: max, value: value || ''}); }
+function picks(name, items, chosen) {
+  const set = new Set(chosen || []);
+  return el('fieldset', {id: name}, el('legend', {textContent: name === 'areas' ? 'Areas in scope' : 'Add-on modules'}),
+    ...items.map(([id, label]) => el('label', {}, el('input', {type: 'checkbox', name, value: id, checked: set.has(id)}), ' ' + label)));
+}
+const select = (id, opts, value) => el('select', {id, name: id}, ...opts.map(([v, t]) => el('option', {value: v, textContent: t, selected: v === value})));
+form.append(
+  field('Your Oracle email', text('email', 'email', 254, pre.email), 'Must be an approved @oracle.com address. We send a confirmation link here.'),
+  field('Customer', text('customer', 'text', 200, pre.customer)),
+  field('Opportunity ID (optional)', text('opportunity', 'text', 400, pre.opportunity)),
+  el('fieldset', {id: 'deal_type'}, el('legend', {textContent: 'Deal type'}), ...cfg.options.deal_types.map(v =>
+    el('label', {}, el('input', {type: 'radio', name: 'deal_type', value: v, checked: v === pre.deal_type}), ' ' + v))),
+  field('Customer country', select('country', [['US', 'United States'], ['CA', 'Canada'], ['ZZ', 'Other (outside the pilot scope)']], pre.country)),
+  field('Currency', select('currency', [['USD', 'USD'], ['CAD', 'CAD']], pre.currency)),
+  field('Number of subsidiaries (optional)', el('input', {id: 'subsidiaries', name: 'subsidiaries', type: 'number', min: 1, max: 500, step: 1, value: pre.subsidiaries || ''})),
+  picks('areas', cfg.options.areas, pre.areas), picks('addons', cfg.options.addons, pre.addons),
+  field('Requirement', el('textarea', {id: 'requirement', name: 'requirement', rows: 9, maxLength: 3000, value: pre.requirement || ''}),
+        'Describe processes, volumes, tax states, PDFs, approvals, reports, customizations, integrations and data to migrate. 20 to 3000 characters.'),
+  field('Attachments (optional)', el('input', {id: 'files', type: 'file', multiple: true, accept: '.pdf,.docx,.xlsx'}),
+        'Up to 3 files (PDF, Word or Excel), 10 MB each. Only our reviewer sees them.'),
+  el('p', {className: 'privacy', textContent: 'Privacy: do not include personal data (names, emails or phone numbers of individuals) in the requirement or attachments. We use these details only to prepare this estimate. Attachments are deleted after 90 days; estimates are kept for 12 months.'}),
+  el('label', {}, el('input', {id: 'privacy_ack', type: 'checkbox'}), ' I confirm no personal data is included'),
+  el('p', {}, el('button', {id: 'go', type: 'submit', textContent: 'Send request'})));
+if (cfg.notice) { const n = document.getElementById('notice'); n.textContent = cfg.notice; n.hidden = false; }
+
+function say(msg, bad) { status.textContent = msg; status.className = bad ? 'err' : ''; }
+async function post(path, body) {
+  const doFetch = window.AwsWafIntegration ? AwsWafIntegration.fetch : fetch;
+  const r = await doFetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  return {ok: r.ok, status: r.status, body: await r.json().catch(() => ({}))};
+}
+async function upload(files) {
+  const r = await post('upload-urls', {files: files.map(f => ({name: f.name, size: f.size}))});
+  if (!r.ok) throw new Error(r.status === 429 ? 'Too many requests. Try again later.' : 'Check the attachments: PDF, Word or Excel, up to 10 MB each.');
+  await Promise.all(r.body.uploads.map((u, i) => {
+    const fd = new FormData(); Object.entries(u.fields).forEach(([k, v]) => fd.append(k, v)); fd.append('file', files[i]);
+    return fetch(u.url, {method: 'POST', body: fd}).then(x => { if (!x.ok) throw new Error('An attachment could not be uploaded.'); });
+  }));
+  uploadedId = r.body.submission_id;
+  return r.body.uploads.map(u => ({key: u.key, name: u.name, size: u.size}));
+}
+function collect() {
+  const v = id => form.elements[id].value, many = n => [...form.querySelectorAll(`input[name=${n}]:checked`)].map(i => i.value);
+  const subs = v('subsidiaries');
+  return {email: v('email'), customer: v('customer'), opportunity: v('opportunity'), deal_type: (form.querySelector('input[name=deal_type]:checked') || {}).value,
+          country: v('country'), currency: v('currency'), subsidiaries: subs === '' ? null : Number(subs), areas: many('areas'), addons: many('addons'),
+          requirement: v('requirement'), privacy_ack: form.elements.privacy_ack.checked};
+}
+async function send() {
+  const btn = document.getElementById('go'); btn.disabled = true; say('Sending…');
+  try {
+    const files = [...document.getElementById('files').files], body = collect();
+    if (files.length) { body.attachments = await upload(files); body.submission_id = uploadedId; }
+    const r = await post('submit', body);
+    if (r.ok) { form.hidden = true; say(r.body.message, false); return; }
+    say(r.status === 429 ? 'Too many requests. Try again later.' : r.body.fields && r.body.fields.length ? 'Please check: ' + r.body.fields.join(', ') : 'Something went wrong. Please try again later.', true);
+  } catch (e) { say(e.message || 'Something went wrong. Please try again later.', true); }
+  btn.disabled = false;
+}
+form.addEventListener('submit', ev => {
+  ev.preventDefault();
+  if (window.AwsWafCaptcha && cfg.captcha.key) {
+    AwsWafCaptcha.renderCaptcha(document.getElementById('captcha'), {apiKey: cfg.captcha.key, onSuccess: () => { document.getElementById('captcha').innerHTML = ''; send(); },
+      onError: () => say('Verification failed. Please try again.', true)});
+  } else send();
+});
+</script>
+</body>
+</html>

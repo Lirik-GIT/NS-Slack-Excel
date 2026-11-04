@@ -1,0 +1,369 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: NS Estimator - Oracle AE web form (API Gateway REST + WAF, form Lambda, SQS, SES, S3, DynamoDB, alarms). Validate only; deployed by the AWS admin.
+
+Parameters:
+  SenderAddress:
+    Type: String
+    Default: estimates@lirik.io
+    Description: From address for every email to AEs (must belong to SenderDomain)
+  SenderDomain:
+    Type: String
+    Default: lirik.io
+    Description: Domain verified in SES (DKIM; SPF and DMARC records are added in DNS by the admin)
+  AlertTopicArn:
+    Type: String
+    Description: Existing SNS topic for alarms (ns-estimator-alerts)
+  HmacKeyParameter:
+    Type: String
+    Default: /ns-estimator/web/hmac_key
+    Description: SSM SecureString holding the link-signing key (created by the admin, never in this template)
+  ApprovedEmailsParameter:
+    Type: String
+    Default: /ns-estimator/web/approved_ae_emails
+    Description: SSM parameter holding the approved AE addresses (comma or newline separated)
+  Ec2RoleName:
+    Type: String
+    Default: ""
+    Description: Instance role of the estimator. If set, the read-only queue/mail/attachment policy is attached to it
+  DailyLimit:
+    Type: Number
+    Default: 10
+    Description: Requests per AE per day
+  IpHourlyLimit:
+    Type: Number
+    Default: 20
+    Description: Requests per IP address per hour (form and upload endpoints)
+  WafRateLimit:
+    Type: Number
+    Default: 100
+    MinValue: 10
+    Description: Requests per IP per 5 minutes before AWS WAF blocks the address
+  CaptchaScriptUrl:
+    Type: String
+    Default: ""
+    Description: AWS WAF CAPTCHA JS API script URL (from the WAF console, Application integration). Empty = no widget
+  CaptchaApiKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: AWS WAF CAPTCHA API key (console) for the widget
+  FormBaseUrl:
+    Type: String
+    Default: ""
+    Description: Public base URL used in email links (custom domain). Empty = the API Gateway URL
+
+Conditions:
+  AttachToEc2Role: !Not [!Equals [!Ref Ec2RoleName, ""]]
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 15
+
+Resources:
+  # ---------------------------------------------------------------- storage
+  AttachmentsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      OwnershipControls: {Rules: [{ObjectOwnership: BucketOwnerEnforced}]}
+      LifecycleConfiguration:
+        Rules:
+          - {Id: unconfirmed-1-day, Status: Enabled, Prefix: pending/, ExpirationInDays: 1, AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}}
+          - {Id: attachments-90-days, Status: Enabled, Prefix: attachments/, ExpirationInDays: 90}
+      CorsConfiguration:
+        CorsRules:
+          - {AllowedMethods: [POST], AllowedOrigins: ["*"], AllowedHeaders: ["*"], MaxAge: 600}  # presigned POST policy gates every upload
+
+  AttachmentsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AttachmentsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: TlsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource: [!GetAtt AttachmentsBucket.Arn, !Sub "${AttachmentsBucket.Arn}/*"]
+            Condition: {Bool: {"aws:SecureTransport": "false"}}
+
+  SubmissionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{AttributeName: pk, AttributeType: S}]
+      KeySchema: [{AttributeName: pk, KeyType: HASH}]
+      TimeToLiveSpecification: {AttributeName: ttl, Enabled: true}
+      SSESpecification: {SSEEnabled: true}
+
+  # ---------------------------------------------------------------- queues
+  SubmissionsDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  SubmissionsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600   # 14 days: nothing is lost while the estimator host is down
+      VisibilityTimeout: 300
+      SqsManagedSseEnabled: true
+      RedrivePolicy: {deadLetterTargetArn: !GetAtt SubmissionsDlq.Arn, maxReceiveCount: 3}
+
+  SesEventsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 345600
+      SqsManagedSseEnabled: true
+
+  SesEventsTopic:
+    Type: AWS::SNS::Topic
+
+  SesEventsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref SesEventsQueue]
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: {Service: sns.amazonaws.com}
+            Action: sqs:SendMessage
+            Resource: !GetAtt SesEventsQueue.Arn
+            Condition: {ArnEquals: {"aws:SourceArn": !Ref SesEventsTopic}}
+
+  SesEventsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties: {Protocol: sqs, TopicArn: !Ref SesEventsTopic, Endpoint: !GetAtt SesEventsQueue.Arn, RawMessageDelivery: false}
+
+  # ---------------------------------------------------------------- email
+  SesIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref SenderDomain
+      DkimAttributes: {SigningEnabled: true}
+      ConfigurationSetAttributes: {ConfigurationSetName: !Ref SesConfigurationSet}
+
+  SesConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      ReputationOptions: {ReputationMetricsEnabled: true}
+      SendingOptions: {SendingEnabled: true}
+
+  SesEventDestination:
+    Type: AWS::SES::ConfigurationSetEventDestination
+    Properties:
+      ConfigurationSetName: !Ref SesConfigurationSet
+      EventDestination:
+        Enabled: true
+        MatchingEventTypes: [bounce, complaint]
+        SnsDestination: {TopicARN: !Ref SesEventsTopic}
+
+  # ---------------------------------------------------------------- form Lambda + API
+  FormLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: !Sub "/aws/lambda/${FormFunction}", RetentionInDays: 90}
+
+  FormFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../../lambda/form/
+      Handler: app.handler
+      Environment:
+        Variables:
+          BUCKET: !Ref AttachmentsBucket
+          TABLE: !Ref SubmissionsTable
+          QUEUE_URL: !Ref SubmissionsQueue
+          SENDER: !Ref SenderAddress
+          CONFIG_SET: !Ref SesConfigurationSet
+          HMAC_PARAM: !Ref HmacKeyParameter
+          APPROVED_PARAM: !Ref ApprovedEmailsParameter
+          DAILY_LIMIT: !Ref DailyLimit
+          IP_HOURLY_LIMIT: !Ref IpHourlyLimit
+          CAPTCHA_SCRIPT_URL: !Ref CaptchaScriptUrl
+          CAPTCHA_API_KEY: !Ref CaptchaApiKey
+          FORM_BASE_URL: !Ref FormBaseUrl
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - {Effect: Allow, Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem], Resource: !GetAtt SubmissionsTable.Arn}
+            - {Effect: Allow, Action: [s3:PutObject, s3:GetObject, s3:DeleteObject], Resource: !Sub "${AttachmentsBucket.Arn}/*"}
+            - {Effect: Allow, Action: sqs:SendMessage, Resource: !GetAtt SubmissionsQueue.Arn}
+            - Effect: Allow
+              Action: ses:SendEmail
+              Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+              Condition: {StringEquals: {"ses:FromAddress": !Ref SenderAddress}}
+            - Effect: Allow
+              Action: ses:SendEmail
+              Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${SesConfigurationSet}"
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource:
+                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${HmacKeyParameter}"
+                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ApprovedEmailsParameter}"
+      Events:
+        Page: {Type: Api, Properties: {RestApiId: !Ref FormApi, Path: /, Method: GET}}
+        Confirm: {Type: Api, Properties: {RestApiId: !Ref FormApi, Path: /confirm, Method: GET}}
+        Resubmit: {Type: Api, Properties: {RestApiId: !Ref FormApi, Path: /resubmit, Method: GET}}
+        Submit: {Type: Api, Properties: {RestApiId: !Ref FormApi, Path: /submit, Method: POST}}
+        UploadUrls: {Type: Api, Properties: {RestApiId: !Ref FormApi, Path: /upload-urls, Method: POST}}
+
+  FormApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      EndpointConfiguration: {Type: REGIONAL}
+      MethodSettings:
+        - {ResourcePath: "/*", HttpMethod: "*", ThrottlingRateLimit: 5, ThrottlingBurstLimit: 10, MetricsEnabled: true}
+
+  # ---------------------------------------------------------------- WAF (attaches to REST APIs only)
+  FormWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      DefaultAction: {Allow: {}}
+      VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: ns-estimator-form}
+      CaptchaConfig: {ImmunityTimeProperty: {ImmunityTime: 300}}
+      Rules:
+        - Name: rate-limit-per-ip
+          Priority: 0
+          Action: {Block: {}}
+          Statement: {RateBasedStatement: {Limit: !Ref WafRateLimit, AggregateKeyType: IP}}
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: rate-limit-per-ip}
+        - Name: captcha-on-submit
+          Priority: 1
+          Action: {Captcha: {}}
+          Statement:
+            OrStatement:
+              Statements:
+                - ByteMatchStatement: {SearchString: /submit, FieldToMatch: {UriPath: {}}, PositionalConstraint: ENDS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
+                - ByteMatchStatement: {SearchString: /upload-urls, FieldToMatch: {UriPath: {}}, PositionalConstraint: ENDS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: captcha-on-submit}
+        - Name: aws-common-rules
+          Priority: 2
+          OverrideAction: {None: {}}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              RuleActionOverrides: [{Name: SizeRestrictions_BODY, ActionToUse: {Count: {}}}]
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: aws-common-rules}
+
+  FormWebAclAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: FormApiprodStage
+    Properties:
+      ResourceArn: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/${FormApi}/stages/prod"
+      WebACLArn: !GetAtt FormWebAcl.Arn
+
+  # ---------------------------------------------------------------- estimator host (read/receive only, no inbound access)
+  EstimatorHostPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Additions for the estimator EC2 role - receive web requests, send email, read attachments, read parameters
+      Roles: !If [AttachToEc2Role, [!Ref Ec2RoleName], !Ref "AWS::NoValue"]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - {Effect: Allow, Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes], Resource: [!GetAtt SubmissionsQueue.Arn, !GetAtt SesEventsQueue.Arn]}
+          - Effect: Allow
+            Action: ses:SendRawEmail
+            Resource:
+              - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+              - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${SesConfigurationSet}"
+            Condition: {StringEquals: {"ses:FromAddress": !Ref SenderAddress}}
+          - {Effect: Allow, Action: s3:GetObject, Resource: !Sub "${AttachmentsBucket.Arn}/attachments/*"}
+          - {Effect: Allow, Action: [ssm:GetParameter, ssm:GetParametersByPath], Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ns-estimator/*"}
+
+  # ---------------------------------------------------------------- alarms (to the existing SNS topic)
+  QueueAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ns-estimator-web-queue-age
+      AlarmDescription: A web request has waited more than 30 minutes; the estimator host may be down
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions: [{Name: QueueName, Value: !GetAtt SubmissionsQueue.QueueName}]
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1800
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopicArn]
+
+  DlqDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ns-estimator-web-dlq-depth
+      AlarmDescription: A web request failed 3 times and needs manual handling
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions: [{Name: QueueName, Value: !GetAtt SubmissionsDlq.QueueName}]
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopicArn]
+
+  FormErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ns-estimator-web-form-errors
+      AlarmDescription: The form Lambda raised errors
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{Name: FunctionName, Value: !Ref FormFunction}]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopicArn]
+
+  BounceRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ns-estimator-web-bounce-rate
+      AlarmDescription: SES bounce rate above 5 percent (AWS puts accounts under review at 10 percent)
+      Namespace: AWS/SES
+      MetricName: Reputation.BounceRate
+      Statistic: Maximum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 0.05
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopicArn]
+
+Outputs:
+  FormUrl:
+    Value: !Sub "https://${FormApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+  SubmissionsQueueUrl:
+    Value: !Ref SubmissionsQueue
+    Description: WEB_QUEUE_URL for the estimator
+  SesEventsQueueUrl:
+    Value: !Ref SesEventsQueue
+    Description: WEB_EVENTS_QUEUE_URL for the estimator
+  AttachmentsBucketName:
+    Value: !Ref AttachmentsBucket
+    Description: WEB_ATTACHMENTS_BUCKET for the estimator
+  EstimatorHostPolicyArn:
+    Value: !Ref EstimatorHostPolicy
+  WebAclArn:
+    Value: !GetAtt FormWebAcl.Arn
+  DkimTokens:
+    Value: !Join [",", [!GetAtt SesIdentity.DkimDNSTokenName1, !GetAtt SesIdentity.DkimDNSTokenName2, !GetAtt SesIdentity.DkimDNSTokenName3]]
+    Description: Add three CNAME records (token._domainkey.<domain> -> token.dkim.amazonses.com) in DNS

@@ -33,6 +33,12 @@ def rom_range(results, currency="USD"):
     return results["rom_low"], results["rom_high"], "$"
 
 
+def reference(req):
+    """The reference the AE sees: for web requests the same short form as the form's emails (lambda/form/app.py:reference)."""
+    sid = req.get("submission_id") if req.get("source") == "web" else None
+    return sid[:8].upper() if sid else req["id"]
+
+
 def _plain(text):
     return re.sub(r"\s+", " ", str(text).replace("*", "")).strip()
 
@@ -57,7 +63,7 @@ def content(req, interp, results, policy, currency="USD"):
         "title": f"NetSuite ROM estimate: {req['customer']}",
         "headline": f"ROM price range: {sym}{low:,.0f} – {sym}{high:,.0f} {currency}",
         "meta": [f"Duration: {ui._duration(results)}", f"Payment milestones: {ui._milestone_split(results)}",
-                 f"Reference: {req['id']}"],
+                 f"Reference: {reference(req)}"],
         "sections": [(h, [_plain(x) for x in lines if _plain(x)]) for h, lines in sections],
         "footer": policy["ae_message"]["disclaimer"],
     }
