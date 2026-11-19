@@ -210,7 +210,9 @@ Resources:
             - {Effect: Allow, Action: sqs:SendMessage, Resource: !GetAtt SubmissionsQueue.Arn}
             - Effect: Allow
               Action: ses:SendEmail
-              Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+              Resource:
+                - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+                - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderAddress}"  # SES authorizes against the address identity when one exists
               Condition: {StringEquals: {"ses:FromAddress": !Ref SenderAddress}}
             - Effect: Allow
               Action: ses:SendEmail
@@ -289,6 +291,7 @@ Resources:
             Action: ses:SendRawEmail
             Resource:
               - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+              - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderAddress}"
               - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${SesConfigurationSet}"
             Condition: {StringEquals: {"ses:FromAddress": !Ref SenderAddress}}
           - {Effect: Allow, Action: s3:GetObject, Resource: !Sub "${AttachmentsBucket.Arn}/attachments/*"}
