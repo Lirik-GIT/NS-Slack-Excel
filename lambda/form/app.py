@@ -78,7 +78,8 @@ def secret(name):
 
 def approved(address):
     listed = re.split(r"[\s,;]+", secret(env("APPROVED_PARAM")).lower())
-    return address.lower() in listed
+    address = address.lower()
+    return address in listed or "@" + address.rpartition("@")[2] in listed  # a list entry like @lirik.io approves the whole domain
 
 
 def clean_text(value, limit, multiline=False):

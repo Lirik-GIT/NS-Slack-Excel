@@ -131,6 +131,12 @@ def test_unapproved_address_gets_the_same_answer_as_an_approved_one(lam):
     assert r["statusCode"] == 200 and json.loads(r["body"]) == form.GENERIC_OK  # no mail sent: send_mail would hit the stub and fail
 
 
+def test_domain_entry_approves_every_address_in_that_domain(lam):
+    lam.approved = "ae.one@oracle.com,@lirik.io"
+    assert form.approved("Anyone@lirik.io") and form.approved("ae.one@oracle.com")
+    assert not form.approved("x@oracle.com") and not form.approved("x@evil-lirik.io") and not form.approved("x@lirik.io.evil.com")
+
+
 def test_ip_rate_limit(lam):
     lam.approved = ""
     codes = [form.handler(event("POST", "/submit", GOOD))["statusCode"] for _ in range(22)]

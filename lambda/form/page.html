@@ -3,12 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NS ROM Form</title>
+<title>NetSuite ROM Form</title>
 <style nonce="{{NONCE}}">
-  :root { --ink:#1b2430; --muted:#5b6673; --line:#d5dbe3; --accent:#1f5fa8; --bg:#f6f8fb; --err:#b3261e; }
-  @media (prefers-color-scheme: dark) { :root { --ink:#e8edf3; --muted:#a3adba; --line:#364150; --accent:#6aa7ee; --bg:#141a22; --err:#f2b8b5; } }
-  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, sans-serif; }
-  main { max-width:44rem; margin:0 auto; padding:1.5rem 1rem 3rem; }
+  :root { --ink:#171D1A; --muted:#5b6673; --line:#d5dbe3; --accent:#1694D2; --accent-dark:#153243; --bg:#f6f8fb; --card:#fff; --err:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e8edf3; --muted:#a3adba; --line:#364150; --accent:#1694D2; --accent-dark:#0e2230; --bg:#141a22; --card:#1b232d; --err:#f2b8b5; } }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  header { background:#fff; border-bottom:4px solid var(--accent); }
+  header div { width:80%; margin:0 auto; padding:.75rem 0; }
+  header img { height:44px; width:auto; display:block; }
+  h1 { color:var(--accent); margin:.25rem 0 .5rem; font-weight:700; }
+  main { width:80%; margin:1.5rem auto 3rem; padding:1.5rem 1.5rem 2rem; background:var(--card); border:1px solid var(--line); border-radius:10px; box-sizing:border-box; }
+  @media (max-width:700px) { main { width:auto; margin:0; padding:1rem; border-radius:0; border-width:1px 0; } header div { width:auto; padding:.75rem 1rem; } }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--accent); outline-offset:1px; }
   label, legend { display:block; font-weight:600; margin:1rem 0 .25rem; }
   input[type=text], input[type=email], input[type=number], select, textarea { width:100%; box-sizing:border-box; padding:.5rem; font:inherit;
     color:inherit; background:transparent; border:1px solid var(--line); border-radius:6px; }
@@ -16,7 +22,8 @@
   fieldset label { font-weight:400; margin:.25rem 0; }
   .hint, .privacy { color:var(--muted); font-size:.9rem; }
   .privacy { border-left:3px solid var(--accent); padding-left:.75rem; margin:1.25rem 0; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:.65rem 1.4rem; font:inherit; cursor:pointer; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:.65rem 1.4rem; font:inherit; font-weight:600; cursor:pointer; }
+  button:hover { background:var(--accent-dark); }
   button:disabled { opacity:.6; cursor:wait; }
   .err { color:var(--err); } #status { margin-top:1rem; min-height:1.5rem; }
   .notice { background:var(--line); padding:.5rem .75rem; border-radius:6px; }
@@ -24,8 +31,9 @@
 {{CAPTCHA_TAG}}
 </head>
 <body>
+<header><div><img alt="Lirik" width="89" height="44" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKQAAABRCAMAAABrNP3ZAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAACEUExURQAAABSTzxaU0haU0haT0RaT0RCPzxaU0RiPzxaU0hWT0RWU0xOTzxaU0hWVzxaT0haU0RaU1BOT0hmc1haU0RWV0xWW0RWT0RWV1BWW1BWPzxWV0haT0haV0hWV0hST0xaU0xaT0hWU0hSS0RaV0xeU0RWU0hWU0hCPzxaV0haV0hWS0qB1CRoAAAAsdFJOUwBA/9+ggBDfIO+Qv1CfMK/Pn1AfsG9foDBfMGBQr59Az++fcH9wj78gn99gjJ3jUgAAAtBJREFUeNrt2Y12ojAQhuHJICGAVbf7v2u1/pRkN/d/f9vT7mlDP6EQQ8Ae3wsIj3QK45EuInb6S9FK2OmKvCI/LtIc7/Tekle3G60rMzyy4qcSQ70z9/zUMTgSjb5K8wKqhkVafkmfMX5iUOQ9w5W6Jvg1PSRSstMD9SplJzkgUrHTH+rVjJ0+x0Km1Ksi1p2knF9b+89kRkMiU7hQ52QG4xwaiVdaU8/m8PkGQpL6r9z9pt4d+LmVCozEbMmcFIo8UrOMd9pet6Ar8oq8IodEyq1NNxv92N2mOqxNXKSxTqJBeNT8pnt6TFgn2Qm5tbXm3ZDi3VVtqxmzsKqJLkiz41o2DNIsmbGM/JAJ1yooCPLnjk9144esuFYmvZF4Kqa8kBZOCYH8xKf7Qj5Ik3CtB/JGohETXsgERiYA8sgNZdQbicdlKgTSclPWB7mFgfRG4gRhueqNxONSCoHcc1M35IHUXGtJIZCGG1MeSBjIEEi8kfowF08tqD/SwOMhBFK+JQqCuiNxIIMgLZzqjcQ/y4rCIJdo9Ed+hYEMg8zh4e2PNPCYDYCEc8VZSAkDGQgp4Eb6InE/o1BICw9vb6TlWjs1DDI9B2l2sJ8NgrRnIPELwwSRR/jCMDUkpmj6yJSmj7yh6SMzdQHIX3QByOoSkCwuAZmYC0CyniYygzf3BJGC6y3ICbbrkZBUcK1EkhN8pJFWNSq51h3VW7JTMRZS5a1jWbBTbkZC0py5BXLLbnosZPtYypzd9mMhZdb2eizhgT8GEsfyGwDc9usfYyDpgGOJtxJLoyLpO+PvaSCA8qhIHMtut1JERdKi4fLuyGI6KrJ9LOfclIiLpLJla0u5oSIyUsLW1kGZy6hI/C8WXZRpZGT763Ge8amS2Mj2rU3N+FQiLvLdrU2UjOnISNzaFlRvMctAaaIh28fSTRyKcvV8RJKUm4OQ0ZFyVVdW/wB72mST9W9N/AAAAABJRU5ErkJggg=="></div></header>
 <main>
-  <h1>NS ROM Form</h1>
+  <h1>NetSuite ROM Form</h1>
   <p class="hint">A Lirik presales reviewer checks every estimate before it is sent to you by email, usually within 1 business day.</p>
   <p id="notice" class="notice" hidden></p>
   <form id="f" novalidate></form>
