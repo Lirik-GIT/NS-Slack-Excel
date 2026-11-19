@@ -52,7 +52,7 @@ Create these with the AWS CLI or console. Never put values in git, chat or `.env
 aws ssm put-parameter --name /ns-estimator/WEB_HMAC_KEY --type SecureString --value "$(openssl rand -base64 48)"
 
 # the pilot AEs allowed to use the form (comma or newline separated)
-aws ssm put-parameter --name /ns-estimator/web/approved_ae_emails --type String --value "updesh.singh@lirik.io,komaldeep@lirik.io"
+aws ssm put-parameter --name /ns-estimator/web/approved_ae_emails --type String --value "updesh.singh@lirik.io,komaldeep.kaur@lirik.io"
 ```
 - The last path segment of the key **must stay `WEB_HMAC_KEY`**: the bot starts with `SSM_PREFIX=/ns-estimator`, which loads direct children of that path as environment variables.
 - Do **not** create a second copy of the key under `/ns-estimator/web/`. A different value means resubmit links (signed by the bot, checked by the Lambda) never verify. (Found and fixed in Phase 5: the stack default was a different path.)
@@ -70,7 +70,7 @@ sam deploy --guided --stack-name ns-estimator-web-form \
   --parameter-overrides AlertTopicArn=<existing ns-estimator-alerts topic ARN> Ec2RoleName=<instance role name> \
                         FormBaseUrl=<custom form URL, see step 8, or leave empty first>
 ```
-For the Lirik-staff pilot add `EmailDomains=oracle.com,lirik.io` (the form accepts only `oracle.com` by default). Keep the defaults for the rest (`SenderAddress=komaldeep@lirik.io`, `SenderName=Lirik NS ROM`, `SenderDomain=lirik.io`, limits). Save the outputs: `FormUrl`, `SubmissionsQueueUrl`, `SesEventsQueueUrl`, `AttachmentsBucketName`, `DkimTokens`.
+For the Lirik-staff pilot add `EmailDomains=oracle.com,lirik.io` (the form accepts only `oracle.com` by default). Keep the defaults for the rest (`SenderAddress=komaldeep.kaur@lirik.io`, `SenderName=Lirik NS ROM`, `SenderDomain=lirik.io`, limits). Save the outputs: `FormUrl`, `SubmissionsQueueUrl`, `SesEventsQueueUrl`, `AttachmentsBucketName`, `DkimTokens`.
 
 ## 6. Manual step: WAF CAPTCHA keys
 CloudFormation cannot create these.
@@ -128,8 +128,8 @@ Alarms go to `ns-estimator-alerts`: queue age over 30 min (bot down), anything i
 
 | # | Decision | Suggested answer | Owner |
 |---|---|---|---|
-| D1 | **Decided:** pilot AEs are `updesh.singh@lirik.io` and `komaldeep@lirik.io`. **Decided:** cc owner is `komaldeep@lirik.io` (set `reviewers.lirik_presales_owner_email` in the host's `web_form.yaml`). | none | Sales Director |
-| D2 | **Decided:** sender is `komaldeep@lirik.io`, form name is "NS ROM Form", From display name is "Lirik NS ROM". **Decided:** use the long AWS form address for now (skip step 8) | none | CTO |
+| D1 | **Decided:** pilot AEs are `updesh.singh@lirik.io` and `komaldeep.kaur@lirik.io`. **Decided:** cc owner is `komaldeep.kaur@lirik.io` (set `reviewers.lirik_presales_owner_email` in the host's `web_form.yaml`). | none | Sales Director |
+| D2 | **Decided:** sender is `komaldeep.kaur@lirik.io`, form name is "NS ROM Form", From display name is "Lirik NS ROM". **Decided:** use the long AWS form address for now (skip step 8) | none | CTO |
 | D3 | **Decided:** AI spend about $5 a day. The Anthropic console only has a monthly limit, so set it to $150 and check the daily figure (see COSTS.md) | Monthly limit $150 | Both |
 | D4 | Who backs up the primary reviewer, and does the 1 business day promise hold on holidays and weekends? | Named backup; the 4-hour reminder already skips weekends | Sales Director |
 | D5 | **Decided:** privacy notice approved. Keep the text in `lambda/form/page.html` in step with what was approved; re-approval is needed if it changes | none | Both |
